@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Données (versionnées avec DVC, pas Git !)
+data/raw/*
+data/processed/*
+data/interim/*
+!data/**/.gitkeep
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+
+# Modèles
+*.pkl
+*.joblib
+*.h5
+*.onnx
+
+# Notebooks
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Reports
+reports/figures/*.png
+reports/metrics/*
+!reports/**/.gitkeep
+
+# Docker
+*.log
