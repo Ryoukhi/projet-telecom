@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: Install development dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check src tests
+      - name: Format check
+        run: black --check src tests
+      - name: Run tests when present
+        shell: bash
+        run: |
+          if find tests -type f -name 'test_*.py' -print -quit | grep -q .; then
+            pytest
+          else
+            echo "No project tests yet; add tests in a later milestone."
+          fi

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv-*/
 venv/
 .env
 
@@ -40,3 +41,17 @@ reports/metrics/*
 
 # Docker
 *.log
+
+# Build and lock artifacts
+build/
+dist/
+pip-wheel-metadata/
+
+
+# Mais on autorise les pointeurs DVC et les .gitignore locaux
+!data/raw/.gitignore
+!data/raw/*.dvc
+!data/processed/.gitignore
+!data/processed/*.dvc
+!data/interim/.gitignore
+!data/interim/*.dvc
