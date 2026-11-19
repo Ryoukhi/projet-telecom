@@ -58,8 +58,10 @@ def basic_checks(df: pd.DataFrame) -> pd.DataFrame:
     # Exclusion PII / colonnes inutiles
     df = df.drop(columns=[c for c in DROP_COLUMNS if c in df.columns])
 
-    # Recodage de la cible : medium/high → 1, low → 0
+    # Cible documentée : medium/high représentent un risque d'impayé, low ne l'est pas.
     df["impaye"] = df["default_risk"].isin(["medium", "high"]).astype(int)
+
+    # default_risk et les variables de construction/comportement ne doivent jamais entrer dans X.
     df = df.drop(columns=["default_risk"])
 
     # Booléen → int
@@ -67,7 +69,7 @@ def basic_checks(df: pd.DataFrame) -> pd.DataFrame:
 
     # Log du déséquilibre
     taux = df["impaye"].mean()
-    logger.info(f"Taux d'impayés (medium+high) : {taux:.2%}")
+    logger.info(f"Taux d'impayés (medium/high) : {taux:.2%}")
     logger.info(f"Distribution : {df['impaye'].value_counts().to_dict()}")
 
     return df

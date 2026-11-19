@@ -11,6 +11,7 @@ venv/
 data/raw/*
 data/processed/*
 data/interim/*
+data/serving/*
 !data/**/.gitkeep
 
 # MLflow
@@ -26,6 +27,7 @@ mlartifacts/
 *.joblib
 *.h5
 *.onnx
+!models/model.pkl
 
 # Notebooks
 .ipynb_checkpoints/
@@ -46,6 +48,7 @@ reports/metrics/*
 build/
 dist/
 pip-wheel-metadata/
+reports/
 
 
 # Mais on autorise les pointeurs DVC et les .gitignore locaux

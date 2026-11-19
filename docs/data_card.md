@@ -29,14 +29,16 @@
 ## 3. Recodage de la cible
 `impaye = 1` si `default_risk ∈ {medium, high}`, sinon `0`.
 Justification : medium+high = risque d'impayé avéré.
+`default_risk`, `late_payment_count`, `payment_consistency_score`, `credit_rating`, `loan_eligibility` et `max_loan_amount_ngn` sont exclus des variables explicatives.
 
 ## 4. Prétraitements
 1. Suppression `phone_number`, `assessment_date`
 2. Dédoublonnage `customer_id`
 3. Recodage cible binaire
-4. Features dérivées : `spend_per_tenure`, `log_max_loan`, `log_avg_spend`, `late_per_tenure`, `consistency_x_late`
+4. Features dérivées : `spend_per_tenure` uniquement
 5. Imputation médiane (num) / mode (cat)
 6. OneHotEncoder (cat), StandardScaler (num)
+7. Preprocessing appris uniquement sur le train, puis appliqué à val/test
 
 ## 5. Split
 - Train 70% / Val 15% / Test 15%, stratifié, graine 42

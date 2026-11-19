@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD MLOps
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  quality:
+  # 1. Intégration Continue (CI) : Lint et Tests
+  quality-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,17 +16,29 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install development dependencies
+
+      - name: Install dependencies
         run: python -m pip install -e ".[dev]"
-      - name: Lint
+
+      - name: Lint (ruff)
         run: ruff check src tests
-      - name: Format check
+
+      - name: Format check (black)
         run: black --check src tests
-      - name: Run tests when present
-        shell: bash
-        run: |
-          if find tests -type f -name 'test_*.py' -print -quit | grep -q .; then
-            pytest
-          else
-            echo "No project tests yet; add tests in a later milestone."
-          fi
+
+      - name: Run tests
+        # On ignore test_api.py sur GitHub car le modèle .pkl n'y est pas
+        run: pytest tests/ --ignore=tests/test_api.py --cov=src --cov-report=term-missing
+
+  # 2. Déploiement Continu (CD) : Build de l'image Docker
+  build-docker:
+    needs: quality-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t impayes-api:${{ github.sha }} .
+
+      # On ne lance pas le conteneur car il n'y a pas de modèle.pkl dans le repo GitHub
+      # On vérifie juste que l'image se construit sans erreur.
