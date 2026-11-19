@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 from sklearn.compose import ColumnTransformer
@@ -19,20 +18,8 @@ NUMERIC_COLS = [
     "tenure_months",
     "avg_monthly_spend_ngn",
     "recharge_frequency_per_month",
-    "payment_consistency_score",
-    "late_payment_count",
-    "max_loan_amount_ngn",
 ]
-CATEGORICAL_COLS = ["operator", "credit_rating", "account_type", "loan_eligibility"]
-
-# Features dérivées (créées avant le ColumnTransformer)
-DERIVED_NUMERIC = [
-    "spend_per_tenure",
-    "log_max_loan",
-    "log_avg_spend",
-    "late_per_tenure",
-    "consistency_x_late",
-]
+CATEGORICAL_COLS = ["operator", "account_type"]
 
 TARGET = "impaye"
 ID_COL = "customer_id"
@@ -44,16 +31,6 @@ def create_business_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Dépense mensuelle par mois d'ancienneté
     df["spend_per_tenure"] = df["avg_monthly_spend_ngn"] / (df["tenure_months"] + 1)
-
-    # Log pour réduire les outliers
-    df["log_max_loan"] = np.log1p(df["max_loan_amount_ngn"])
-    df["log_avg_spend"] = np.log1p(df["avg_monthly_spend_ngn"])
-
-    # Retards par mois d'ancienneté (intensité du risque)
-    df["late_per_tenure"] = df["late_payment_count"] / (df["tenure_months"] + 1)
-
-    # Interaction risque : faible consistance + retards élevés
-    df["consistency_x_late"] = df["payment_consistency_score"] * df["late_payment_count"]
 
     return df
 
@@ -73,7 +50,7 @@ def build_preprocessor() -> ColumnTransformer:
     )
     return ColumnTransformer(
         [
-            ("num", numeric_pipeline, NUMERIC_COLS + DERIVED_NUMERIC),
+            ("num", numeric_pipeline, NUMERIC_COLS),
             ("cat", categorical_pipeline, CATEGORICAL_COLS),
         ]
     )

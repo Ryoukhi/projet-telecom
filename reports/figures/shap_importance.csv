@@ -1,0 +1,12 @@
+feature,mean_abs_shap
+num__credit_score,0.89338917
+num__tenure_months,0.042039182
+num__spend_per_tenure,0.038611304
+num__avg_monthly_spend_ngn,0.03059019
+num__recharge_frequency_per_month,0.019001419
+cat__operator_MTN,0.005015505
+cat__operator_Airtel,0.0046886634
+cat__operator_9mobile,0.004663189
+cat__operator_Glo,0.004518821
+cat__account_type_postpaid,0.0037522158
+cat__account_type_prepaid,0.0015572216

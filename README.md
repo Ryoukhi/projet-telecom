@@ -33,3 +33,15 @@ black --check src tests
 ```
 
 La suite de tests sera exécutée dès que les tests du projet seront ajoutés. Les données, notebooks, rapports, modèles et instructions de lancement seront documentés au fil des milestones.
+
+## Déploiement Streamlit Community Cloud
+
+L'application Streamlit charge directement le modèle `models/model.pkl`; l'API FastAPI et Docker ne sont pas nécessaires pour cette démo.
+
+1. Vérifier que `models/model.pkl` existe. Pour le régénérer, lancer `python -m src.training.export_best_model` dans l'environnement du projet.
+2. Ajouter le fichier du modèle au dépôt Git : il est nécessaire au démarrage de l'application. Ne pas ajouter `.env`, les données brutes ou des secrets.
+3. Pousser le dépôt sur GitHub.
+4. Dans [Streamlit Community Cloud](https://share.streamlit.io/), créer une application en sélectionnant le dépôt, la branche et `src/serving/streamlit_app.py` comme fichier d'entrée.
+5. Choisir Python 3.11 dans les paramètres avancés. Les dépendances sont lues depuis `requirements.txt`.
+
+L'application n'utilise pas de secret Streamlit. Le fichier `models/model.pkl` fait environ 1,4 Mo dans l'environnement de développement actuel.
