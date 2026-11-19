@@ -89,12 +89,20 @@ if submitted:
 
         st.divider()
         st.subheader("Résultat de la prédiction")
+        risk_label = {"low": "Faible", "medium": "Moyen", "high": "Élevé"}[risk]
         col_probability, col_risk = st.columns(2)
         col_probability.metric("Probabilité d'impayé", f"{probability:.2%}")
-        col_risk.metric("Niveau de risque", risk.upper())
+        col_risk.metric("Niveau de risque", risk_label)
+        st.caption("Niveau de risque : faible (< 20 %), moyen (20 à 50 %), élevé (≥ 50 %).")
         if prediction:
-            st.error("⚠️ Risque élevé d'impayé. Une relance est recommandée.")
+            st.warning(
+                f"⚠️ Le seuil de décision de {THRESHOLD:.0%} est atteint. "
+                f"Le modèle recommande une relance. Le niveau de risque estimé reste « {risk_label.lower()} » selon les catégories ci-dessus."
+            )
         else:
-            st.success("✅ Ce client présente un faible risque d'impayé.")
+            st.success(
+                f"✅ La probabilité est inférieure au seuil de décision de {THRESHOLD:.0%}. "
+                "Aucune relance n'est recommandée par cette règle."
+            )
     except Exception as exc:
         st.error(f"La prédiction a échoué : {exc}")
