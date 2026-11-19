@@ -10,7 +10,10 @@ import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODEL_PATH = PROJECT_ROOT / "models" / "model.pkl"
-LOCAL_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "telecom_credit_scoring_nigeria.csv"
+LOCAL_DATA_PATHS = [
+    PROJECT_ROOT / "data" / "serving" / "clients.csv",
+    PROJECT_ROOT / "data" / "raw" / "telecom_credit_scoring_nigeria.csv",
+]
 THRESHOLD = 0.33
 
 CLIENT_COLUMNS = [
@@ -133,9 +136,10 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
     file_bytes = uploaded_file.getvalue()
     file_name = uploaded_file.name
-elif LOCAL_DATA_PATH.is_file():
-    file_bytes = LOCAL_DATA_PATH.read_bytes()
-    file_name = LOCAL_DATA_PATH.name
+elif next((path for path in LOCAL_DATA_PATHS if path.is_file()), None) is not None:
+    local_data_path = next(path for path in LOCAL_DATA_PATHS if path.is_file())
+    file_bytes = local_data_path.read_bytes()
+    file_name = local_data_path.name
     st.caption("Base locale du projet chargée automatiquement.")
 else:
     st.info("Chargez le fichier CSV ou Excel de vos clients pour commencer.")
@@ -190,7 +194,19 @@ try:
     st.subheader("Résultat de la prédiction")
     result_probability, result_risk = st.columns(2)
     result_probability.metric("Probabilité estimée d'impayé", f"{probability:.2%}")
-    result_risk.metric("Niveau de risque", risk)
+    risk_colors = {
+        "Faible": ("#166534", "#dcfce7", "#86efac"),
+        "Moyen": ("#92400e", "#fef3c7", "#fcd34d"),
+        "Élevé": ("#991b1b", "#fee2e2", "#fca5a5"),
+    }
+    text_color, background_color, border_color = risk_colors[risk]
+    result_risk.markdown("**Niveau de risque**")
+    result_risk.markdown(
+        f'<div style="display:inline-block;padding:0.45rem 0.8rem;border-radius:999px;'
+        f"background:{background_color};color:{text_color};border:1px solid {border_color};"
+        f'font-weight:700;font-size:1.05rem">● {risk}</div>',
+        unsafe_allow_html=True,
+    )
     st.caption("Niveau : faible (< 20 %), moyen (20 à 50 %), élevé (≥ 50 %).")
     if prediction:
         st.warning(

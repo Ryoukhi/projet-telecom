@@ -37,7 +37,15 @@ La suite de tests sera exécutée dès que les tests du projet seront ajoutés. 
 
 ## Déploiement Streamlit Community Cloud
 
-L'application Streamlit charge directement le modèle `models/model.pkl`; l'API FastAPI et Docker ne sont pas nécessaires pour cette démo. L'utilisateur peut charger sa base client au format CSV ou Excel (`.xlsx`/`.xls`), rechercher un identifiant, puis sélectionner le client pour afficher automatiquement son profil et sa prédiction. En local, le fichier `data/raw/telecom_credit_scoring_nigeria.csv` est chargé par défaut s'il existe.
+L'application Streamlit charge directement le modèle `models/model.pkl`; l'API FastAPI et Docker ne sont pas nécessaires pour cette démo. L'utilisateur peut charger sa base client au format CSV ou Excel (`.xlsx`/`.xls`), rechercher un identifiant, puis sélectionner le client pour afficher automatiquement son profil et sa prédiction. En local, l'application charge d'abord `data/serving/clients.csv`, puis utilise `data/raw/telecom_credit_scoring_nigeria.csv` si la base générée n'existe pas.
+
+Pour générer une base réduite et sans numéro de téléphone depuis le dataset source :
+
+```bash
+python scripts/generate_client_database.py
+```
+
+Le script crée `data/serving/clients.csv`, que l'application charge automatiquement en local. Pour limiter la base (par exemple à 5 000 clients), utiliser `python scripts/generate_client_database.py --limit 5000`. Pour une application sur Community Cloud, chargez ce CSV avec le sélecteur de fichier de l'application.
 
 1. Vérifier que `models/model.pkl` existe. Pour le régénérer, lancer `python -m src.training.export_best_model` dans l'environnement du projet.
 2. Ajouter le fichier du modèle au dépôt Git : il est nécessaire au démarrage de l'application. La base client n'est pas intégrée à l'application cloud : elle est chargée par l'utilisateur au format CSV ou Excel. Ne pas ajouter `.env`, les données brutes ou des secrets.
