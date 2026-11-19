@@ -1,13 +1,28 @@
-"""Interface Streamlit autonome pour la prédiction du risque d'impayé."""
+"""Application Streamlit de prédiction à partir d'un client sélectionné."""
 
+from io import BytesIO
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 import streamlit as st
 
-MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "model.pkl"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+MODEL_PATH = PROJECT_ROOT / "models" / "model.pkl"
+LOCAL_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "telecom_credit_scoring_nigeria.csv"
 THRESHOLD = 0.33
+
+CLIENT_COLUMNS = [
+    "customer_id",
+    "operator",
+    "credit_score",
+    "tenure_months",
+    "avg_monthly_spend_ngn",
+    "recharge_frequency_per_month",
+    "max_loan_amount_ngn",
+    "account_type",
+]
 FEATURE_COLUMNS = [
     "cat__account_type_postpaid",
     "cat__account_type_prepaid",
@@ -31,78 +46,166 @@ def load_model():
     return joblib.load(MODEL_PATH)
 
 
-st.set_page_config(page_title="Prédiction Impayés Télécom", page_icon="📱")
-st.title("Prédiction d'impayés télécom")
-st.write("Renseignez le profil du client pour évaluer son risque d'impayé.")
+@st.cache_data(show_spinner="Lecture du fichier clients…")
+def load_clients(file_bytes: bytes, file_name: str) -> pd.DataFrame:
+    """Lit un fichier clients CSV ou Excel et vérifie les colonnes nécessaires."""
+    suffix = Path(file_name).suffix.lower()
+    if suffix == ".csv":
+        clients = pd.read_csv(BytesIO(file_bytes))
+    elif suffix in {".xlsx", ".xls"}:
+        clients = pd.read_excel(BytesIO(file_bytes))
+    else:
+        raise ValueError(
+            "Format non pris en charge. Utilisez un fichier CSV ou Excel (.xlsx, .xls)."
+        )
+
+    missing = sorted(set(CLIENT_COLUMNS) - set(clients.columns))
+    if missing:
+        raise ValueError("Colonnes requises absentes : " + ", ".join(missing))
+
+    clients = clients.drop_duplicates(subset=["customer_id"], keep="first").copy()
+    clients["customer_id"] = clients["customer_id"].astype("string").str.strip()
+    clients = clients[clients["customer_id"].notna() & clients["customer_id"].ne("")]
+    return clients.reset_index(drop=True)
+
+
+def make_features(client: pd.Series) -> pd.DataFrame:
+    """Construit les 11 variables attendues par le modèle servi."""
+    operator = str(client["operator"]).strip().lower()
+    account_type = str(client["account_type"]).strip().lower()
+    if operator not in {"mtn", "airtel", "glo", "9mobile"}:
+        raise ValueError(f"Opérateur non reconnu pour ce client : {client['operator']}")
+    if account_type not in {"prepaid", "postpaid"}:
+        raise ValueError(f"Type de compte non reconnu pour ce client : {client['account_type']}")
+
+    try:
+        credit_score = float(pd.to_numeric(client["credit_score"], errors="raise"))
+        avg_spend = float(pd.to_numeric(client["avg_monthly_spend_ngn"], errors="raise"))
+        max_loan = float(pd.to_numeric(client["max_loan_amount_ngn"], errors="raise"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Score de crédit, dépense ou montant de prêt manquant/invalide.") from exc
+
+    if not all(np.isfinite(value) and value >= 0 for value in (credit_score, avg_spend, max_loan)):
+        raise ValueError(
+            "Le score et les montants du client doivent être des nombres positifs valides."
+        )
+
+    features = {
+        "cat__account_type_postpaid": int(account_type == "postpaid"),
+        "cat__account_type_prepaid": int(account_type == "prepaid"),
+        "cat__operator_9mobile": int(operator == "9mobile"),
+        "cat__operator_Airtel": int(operator == "airtel"),
+        "cat__operator_Glo": int(operator == "glo"),
+        "cat__operator_MTN": int(operator == "mtn"),
+        "num__avg_monthly_spend_ngn": avg_spend,
+        "num__credit_score": credit_score,
+        "num__log_avg_spend": float(np.log1p(avg_spend)),
+        "num__log_max_loan": float(np.log1p(max_loan)),
+        "num__max_loan_amount_ngn": max_loan,
+    }
+    return pd.DataFrame([features], columns=FEATURE_COLUMNS)
+
+
+def display_number(value, suffix="") -> str:
+    """Formate une valeur numérique du profil sans faire échouer l'interface."""
+    number = pd.to_numeric(value, errors="coerce")
+    if pd.isna(number):
+        return "Non renseigné"
+    return f"{number:,.0f}{suffix}"
+
+
+st.set_page_config(page_title="Risque d'impayé télécom", page_icon="📱", layout="centered")
+st.title("Prédiction du risque d'impayé")
+st.write("Chargez la base clients, recherchez un client et consultez sa prédiction.")
 
 try:
     model = load_model()
 except Exception as exc:
-    st.error(
-        f"Impossible de charger le modèle. Vérifiez que `models/model.pkl` est présent. Détail : {exc}"
-    )
+    st.error(f"Impossible de charger le modèle `models/model.pkl` : {exc}")
     st.stop()
 
-with st.form("prediction_form"):
-    st.subheader("Caractéristiques du client")
-    col1, col2 = st.columns(2)
+uploaded_file = st.file_uploader(
+    "Base clients (CSV ou Excel)",
+    type=["csv", "xlsx", "xls"],
+    help="Le fichier doit contenir un identifiant client, son opérateur, son type de compte et ses données financières.",
+)
 
-    with col1:
-        credit_score = st.number_input("Score de crédit", min_value=0, max_value=1000, value=600)
-        tenure_months = st.number_input("Ancienneté (mois)", min_value=0, value=12)
-        avg_spend = st.number_input("Dépense mensuelle (NGN)", min_value=0, value=20000)
-        recharge_freq = st.number_input("Recharges / mois", min_value=0, value=5)
+if uploaded_file is not None:
+    file_bytes = uploaded_file.getvalue()
+    file_name = uploaded_file.name
+elif LOCAL_DATA_PATH.is_file():
+    file_bytes = LOCAL_DATA_PATH.read_bytes()
+    file_name = LOCAL_DATA_PATH.name
+    st.caption("Base locale du projet chargée automatiquement.")
+else:
+    st.info("Chargez le fichier CSV ou Excel de vos clients pour commencer.")
+    st.stop()
 
-    with col2:
-        max_loan = st.number_input("Montant max du prêt (NGN)", min_value=0, value=50000)
-        operator = st.selectbox("Opérateur", ["MTN", "Airtel", "Glo", "9mobile"])
-        account_type = st.selectbox("Type de compte", ["Prepaid", "Postpaid"])
+try:
+    clients = load_clients(file_bytes, file_name)
+except Exception as exc:
+    st.error(f"La base clients ne peut pas être utilisée : {exc}")
+    st.stop()
 
-    submitted = st.form_submit_button("Prédire le risque")
+st.caption(f"{len(clients):,} clients disponibles · fichier : {file_name}")
+search = st.text_input("Rechercher un client par identifiant", placeholder="Ex. 51426327")
+if search.strip():
+    matches = clients[
+        clients["customer_id"].str.contains(search.strip(), case=False, regex=False, na=False)
+    ].head(100)
+else:
+    matches = clients.head(50)
+    st.caption("Saisissez quelques caractères de l’identifiant pour filtrer les résultats.")
 
-if submitted:
-    import numpy as np
+if matches.empty:
+    st.warning("Aucun client ne correspond à cette recherche.")
+    st.stop()
 
-    features = {
-        "cat__account_type_postpaid": int(account_type == "Postpaid"),
-        "cat__account_type_prepaid": int(account_type == "Prepaid"),
-        "cat__operator_9mobile": int(operator == "9mobile"),
-        "cat__operator_Airtel": int(operator == "Airtel"),
-        "cat__operator_Glo": int(operator == "Glo"),
-        "cat__operator_MTN": int(operator == "MTN"),
-        "num__avg_monthly_spend_ngn": float(avg_spend),
-        "num__credit_score": float(credit_score),
-        "num__log_avg_spend": float(np.log1p(avg_spend)),
-        "num__log_max_loan": float(np.log1p(max_loan)),
-        "num__max_loan_amount_ngn": float(max_loan),
-    }
+client_ids = matches["customer_id"].tolist()
+selected_id = st.selectbox("Sélectionner le client", client_ids)
+client = clients.loc[clients["customer_id"].eq(selected_id)].iloc[0]
 
-    # Ces champs sont demandés dans le formulaire pour décrire le client,
-    # même s'ils ne figurent pas parmi les 11 variables retenues du modèle.
-    _ = tenure_months, recharge_freq
-    try:
-        probability = float(
-            model.predict_proba(pd.DataFrame([features], columns=FEATURE_COLUMNS))[0, 1]
+st.subheader(f"Profil client · {selected_id}")
+profile_1, profile_2, profile_3 = st.columns(3)
+profile_1.metric("Opérateur", str(client["operator"]))
+profile_2.metric("Type de compte", str(client["account_type"]))
+profile_3.metric("Score de crédit", display_number(client["credit_score"]))
+profile_4, profile_5, profile_6 = st.columns(3)
+profile_4.metric("Ancienneté", display_number(client["tenure_months"], " mois"))
+profile_5.metric("Dépense mensuelle", display_number(client["avg_monthly_spend_ngn"], " NGN"))
+profile_6.metric("Recharges / mois", display_number(client["recharge_frequency_per_month"]))
+st.caption(
+    "Montant maximal de prêt : "
+    f"{display_number(client['max_loan_amount_ngn'], ' NGN')}. "
+    "L'ancienneté et les recharges sont affichées à titre informatif ; le modèle ne les utilise pas dans cette version."
+)
+
+try:
+    features = make_features(client)
+    probability = float(model.predict_proba(features)[0, 1])
+    prediction = int(probability >= THRESHOLD)
+    risk = "Faible" if probability < 0.2 else "Moyen" if probability < 0.5 else "Élevé"
+
+    st.divider()
+    st.subheader("Résultat de la prédiction")
+    result_probability, result_risk = st.columns(2)
+    result_probability.metric("Probabilité estimée d'impayé", f"{probability:.2%}")
+    result_risk.metric("Niveau de risque", risk)
+    st.caption("Niveau : faible (< 20 %), moyen (20 à 50 %), élevé (≥ 50 %).")
+    if prediction:
+        st.warning(
+            f"Le seuil de décision de {THRESHOLD:.0%} est atteint. Le modèle recommande une relance. "
+            f"Le niveau de risque estimé reste « {risk.lower()} » selon les catégories ci-dessus."
         )
-        prediction = int(probability >= THRESHOLD)
-        risk = "low" if probability < 0.2 else "medium" if probability < 0.5 else "high"
+    else:
+        st.success(
+            f"La probabilité est sous le seuil de décision de {THRESHOLD:.0%}. "
+            "Aucune relance n'est recommandée par cette règle."
+        )
+except Exception as exc:
+    st.error(f"La prédiction n'a pas pu être calculée : {exc}")
 
-        st.divider()
-        st.subheader("Résultat de la prédiction")
-        risk_label = {"low": "Faible", "medium": "Moyen", "high": "Élevé"}[risk]
-        col_probability, col_risk = st.columns(2)
-        col_probability.metric("Probabilité d'impayé", f"{probability:.2%}")
-        col_risk.metric("Niveau de risque", risk_label)
-        st.caption("Niveau de risque : faible (< 20 %), moyen (20 à 50 %), élevé (≥ 50 %).")
-        if prediction:
-            st.warning(
-                f"⚠️ Le seuil de décision de {THRESHOLD:.0%} est atteint. "
-                f"Le modèle recommande une relance. Le niveau de risque estimé reste « {risk_label.lower()} » selon les catégories ci-dessus."
-            )
-        else:
-            st.success(
-                f"✅ La probabilité est inférieure au seuil de décision de {THRESHOLD:.0%}. "
-                "Aucune relance n'est recommandée par cette règle."
-            )
-    except Exception as exc:
-        st.error(f"La prédiction a échoué : {exc}")
+st.caption(
+    "La prédiction est une estimation issue du modèle et doit aider à prioriser le suivi, "
+    "pas remplacer une vérification du dossier client."
+)
